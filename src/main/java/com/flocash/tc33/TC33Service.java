@@ -153,7 +153,8 @@ public class TC33Service {
 
             int nextLineNumber = 0;
 
-            for (String line : lines) {
+            while (nextLineNumber < lines.size()) {
+                String line = lines.get(nextLineNumber);
                 if (line.startsWith("90")){
                     if (isEmptySpacesOfLengthFive(line.substring(19, 24))){
                         fileHeaderRecord = fileHeaderRecord(line);
@@ -162,12 +163,14 @@ public class TC33Service {
                         fileHeaderRecordIncoming = fileHeaderRecordIncoming(line);
                     }
                     nextLineNumber++;
+                    continue;
                 }
                 if (line.startsWith("91")){
                     batchTrailerRecord = batchTrailerRecord(line);
                     batchRecord.setBatchTrailerRecord(batchTrailerRecord);
                     batchRecords.add(batchRecord);
                     nextLineNumber++;
+                    continue;
 
                 }
                 if (line.startsWith("92")){
@@ -185,362 +188,369 @@ public class TC33Service {
 
                     batchRecord = new BatchRecord();
                     nextLineNumber++;
+                    continue;
                 }
-                if(line.startsWith("33")) {
-                    if (line.substring(16, 20).equalsIgnoreCase("HEDR")) {
+                if (line.startsWith("33")) {
+
+                    if ("HEDR".equalsIgnoreCase(line.substring(16, 20))) {
                         fileHeader = parseFileHeader(line);
                         nextLineNumber++;
+                        continue;
                     }
 
-                    if (line.substring(16, 20).equalsIgnoreCase("TRLR")) {
-                        transactions.add(transaction);
+                    if ("TRLR".equalsIgnoreCase(line.substring(16, 20))) {
+                        if (transaction != null) {
+                            transactions.add(transaction);
+                        }
+
                         fileTrailer = parseFileTrailer(line);
 
                         batchRecord.setFileHeader(fileHeader);
                         batchRecord.setTransactions(transactions);
                         batchRecord.setFileTrailer(fileTrailer);
+
+                        transaction = null;
+                        transactions = new ArrayList<>();
+
                         nextLineNumber++;
+                        continue;
                     }
-
-                    if (line.startsWith("CP01", 16)) {
-
-                        if (transaction != null && !Objects.equals(transaction.getTransactionData().getTransactionCode(), null)) {
-                            transactions.add(transaction);
-                            transaction = new Transaction();
-                        }
-
-                        transactionData = parseTransactionData(line);
-                        nextLineNumber++;
-                        String newLine = lines.get(nextLineNumber);
-                        log.info("Processing CP01 record, initial new line: {}", nextLineNumber);
-
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-                            nextLineNumber++;
-
-                            log.info("Inside while loop for CP01 sub-records, processing line: {}", newLine);
-
-                            if (newLine.charAt(3) == '1'){
-                                log.info("Adding Additional Data");
-                                additionalData = parseAdditionalData(newLine);
-                                transactionData.setAdditionalData(additionalData);
-                            }
-                            if (newLine.charAt(3) == '2'){
-                                billingAndShipping = parseBillingAndShipping(newLine);
-                                transactionData.setBillingAndShipping(billingAndShipping);
-                            }
-                            if (newLine.charAt(3) == '3'){
-                                billingAndShipping2 = parseBillingAndShipping2(newLine);
-                                transactionData.setBillingAndShipping2(billingAndShipping2);
-                            }
-                            if (newLine.charAt(3) == '4'){
-                                merchantData = parseMerchantData(newLine);
-                                transactionData.setMerchantData(merchantData);
-                            }
-                            if (newLine.charAt(3) == '5'){
-                                installmentPayment = parseInstallmentPayment(newLine);
-                                transactionData.setInstallmentPayment(installmentPayment);
-                            }
-                            if (newLine.charAt(3) == '6'){
-                                gatewayData = parseGatewayData(newLine);
-                                transactionData.setGatewayData(gatewayData);
-                            }
-                            if (newLine.charAt(3) == '7'){
-                                gatewayData2 = parseGatewayData2(newLine);
-                                transactionData.setGatewayData2(gatewayData2);
-                            }
-                            if (newLine.charAt(3) == '8'){
-                                supplementalData = parseSupplementalData(newLine);
-                                transactionData.setSupplementalData(supplementalData);
-                            }
-                            if (newLine.charAt(3) == '9' && newLine.startsWith("710", 4)){
-                                intraCountryDataSouthAfrica = parseIntraCountryDataSouthAfrica(newLine);
-                                transactionData.setIntraCountryDataSouthAfrica(intraCountryDataSouthAfrica);
-                            }
-                            if (newLine.charAt(3) == 'A'){
-                                currencyConversion = parseCurrencyConversion(newLine);
-                                transactionData.setCurrencyConversion(currencyConversion);
-                            }
-
-                            if(newLine.charAt(3) == 'B'){
-                                gatewayData3 = parseGatewayData3(newLine);
-                                transactionData.setGatewayData3(gatewayData3);
-                            }
-                            newLine = lines.get(nextLineNumber);
-
-                        }
-                        transaction.setTransactionData(transactionData);
-                    }
-
-                    if (line.startsWith("CP02", 16)) {
-                        emvData = parseEMVData(line);
-                        String newLine = lines.get(nextLineNumber);
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-                            nextLineNumber++;
-                            if (newLine.charAt(3) == '1') {
-                                emvData2 = parseEMVData2(newLine);
-                                emvData.setEmvData2(emvData2);
-                            }
-                            newLine = lines.get(nextLineNumber);
-                        }
-                        transaction.setEmvData(emvData);
-                    }
-                    if (line.startsWith("CP03", 16)) {
-                        lodgingSummary = parseLodgingSummary(line);
-                        String newLine = lines.get(nextLineNumber);
-
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-                            nextLineNumber++;
-                            if (newLine.charAt(3) == '1') {
-                                lodgingSummary2 = parseLodgingSummary2(newLine);
-                                lodgingSummary.setLodgingSummary2(lodgingSummary2);
-                            }
-                            if (newLine.charAt(3) == '2') {
-                                lodgingSummary3 = parseLodgingSummary3(newLine);
-                                lodgingSummary.setLodgingSummary3(lodgingSummary3);
-                            }
-                            if (newLine.charAt(3) == '3') {
-                                lodgingAdditionalAmounts = parseLodgingAdditionalAmounts(newLine);
-                                lodgingSummary.setLodgingAdditionalAmounts(lodgingAdditionalAmounts);
-                            }
-                            if (newLine.charAt(3) == '4') {
-                                lodgingAdditionalAmounts2 = parseLodgingAdditionalAmounts2(newLine);
-                                lodgingSummary.setLodgingAdditionalAmounts2(lodgingAdditionalAmounts2);
-                            }
-                            newLine = lines.get(nextLineNumber);
-                        }
-                        transaction.setLodgingSummary(lodgingSummary);
-                    }
-                    if (line.startsWith("CP04", 16)){
-                        levelTwoData = parseLevelTwoData(line);
-                        String newLine = lines.get(nextLineNumber);
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-                            nextLineNumber++;
-                            if (newLine.charAt(3) == '1') {
-                                levelTwoDataAmericanExpress = parseLevelTwoDataAmericanExpress(newLine);
-                                levelTwoData.setLevelTwoDataAmericanExpress(levelTwoDataAmericanExpress);
-                            }
-                            if (newLine.charAt(3) == '2') {
-                                levelThreeDataPurchasingTransactionSummary = parseLevelThreeDataPurchasingTransactionSummary(newLine);
-                                levelTwoData.setLevelThreeDataPurchasingTransactionSummary(levelThreeDataPurchasingTransactionSummary);
-                            }
-                            if (newLine.charAt(3) == '3') {
-                                levelThreeDataPurchasingTransactionSummary2 = parseLevelThreeDataPurchasingTransactionSummary2(newLine);
-                                levelTwoData.setLevelThreeDataPurchasingTransactionSummary2(levelThreeDataPurchasingTransactionSummary2);
-                            }
-                            newLine = lines.get(nextLineNumber);
-                        }
-                        transaction.setLevelTwoData(levelTwoData);
-                    }
-                    if (line.startsWith("CP05", 16)){
-                        passengerItineraryData = parsePassengerItineraryData(line);
-                        String newLine = lines.get(nextLineNumber);
-
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-                            nextLineNumber++;
-                            if (newLine.charAt(3) == '1') {
-                                passengerItineraryData2 = parsePassengerItineraryData2(newLine);
-                                passengerItineraryData.setPassengerItineraryData2(passengerItineraryData2);
-                            }
-                            if (newLine.charAt(3) == '2') {
-                                passengerItineraryData3 = parsePassengerItineraryData3(newLine);
-                                passengerItineraryData.setPassengerItineraryData3(passengerItineraryData3);
-                            }
-                            if (newLine.charAt(3) == '3') {
-                                passengerItineraryData4 = parsePassengerItineraryData4(newLine);
-                                passengerItineraryData.setPassengerItineraryData4(passengerItineraryData4);
-                            }
-                            if (newLine.charAt(3) == '4') {
-                                passengerItineraryData5 = parsePassengerItineraryData5(newLine);
-                                passengerItineraryData.setPassengerItineraryData5(passengerItineraryData5);
-                            }
-                            if (newLine.charAt(3) == '5') {
-                                passengerItineraryData6 = parsePassengerItineraryData6(newLine);
-                                passengerItineraryData.setPassengerItineraryData6(passengerItineraryData6);
-                            }
-                            if (newLine.charAt(3) == '6') {
-                                passengerTransport = parsePassengerTransport(newLine);
-                                passengerItineraryData.setPassengerTransport(passengerTransport);
-                            }
-                            if (newLine.charAt(3) == '7') {
-                                passengerItineraryData7 = parsePassengerItineraryData7(newLine);
-                                passengerItineraryData.setPassengerItineraryData7(passengerItineraryData7);
-                            }
-                            newLine = lines.get(nextLineNumber);
-                        }
-                        transaction.setPassengerItineraryData(passengerItineraryData);
-                    }
-                    if (line.startsWith("CP06", 16)){
-                        enhancedDataPurchasingTransactionLineItemDetail = parseEnhancedDataPurchasingTransactionLineItemDetail(line);
-                        String newLine = lines.get(nextLineNumber);
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-                            nextLineNumber++;
-                            if (newLine.charAt(3) == '1') {
-                                purchasingTransactionLineItemDetail = parsePurchasingTransactionLineItemDetail(newLine);
-                                enhancedDataPurchasingTransactionLineItemDetail.setPurchasingTransactionLineItemDetail(purchasingTransactionLineItemDetail);
-                            }
-                            newLine = lines.get(nextLineNumber);
-                        }
-                        transaction.setEnhancedDataPurchasingTransactionLineItemDetail(enhancedDataPurchasingTransactionLineItemDetail);
-                    }
-                    if (line.startsWith("CP07", 16)){
-                        countryData = parseCountryData(line);
-                        String newLine = lines.get(nextLineNumber);
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-                            nextLineNumber++;
-                            if (newLine.charAt(3) == '1') {
-                                brazilCountryDataPARC = parseBrazilCountryDataPARC(newLine);
-                                countryData.setBrazilCountryDataPARC(brazilCountryDataPARC);
-                            }
-                            if (newLine.charAt(3) == '2') {
-                                brazilCountryDataBNDES = parseBrazilCountryDataBNDES(newLine);
-                                countryData.setBrazilCountryDataBNDES(brazilCountryDataBNDES);
-                            }
-                            if (newLine.charAt(3) == '3') {
-                                brazilCountryDataAmericanExpress = parseBrazilCountryDataAmericanExpress(newLine);
-                                countryData.setBrazilCountryDataAmericanExpress(brazilCountryDataAmericanExpress);
-                            }
-                            if (newLine.charAt(3) == '4') {
-                                commercialMastercardInstallmentPayments = parseCommercialMastercardInstallmentPayments(newLine);
-                                countryData.setCommercialMastercardInstallmentPayments(commercialMastercardInstallmentPayments);
-                            }
-                            if (newLine.charAt(3) == '5') {
-                                consumerMastercardInstallmentPayments = parseConsumerMastercardInstallmentPayments(newLine);
-                                countryData.setConsumerMastercardInstallmentPayments(consumerMastercardInstallmentPayments);
-                            }
-                            if (newLine.charAt(3) == '6') {
-                                brazilCountryDataMastercardBNDES1 = parseBrazilCountryDataMastercardBNDES1(newLine);
-                                countryData.setBrazilCountryDataMastercardBNDES1(brazilCountryDataMastercardBNDES1);
-                            }
-                            if (newLine.charAt(3) == '7') {
-                                debtRepaymentInformation = parseDebtRepaymentInformation(newLine);
-                                countryData.setDebtRepaymentInformation(debtRepaymentInformation);
-                            }
-                            if (newLine.charAt(3) == '8') {
-                                japanMCAdditionalData = parseJapanMCAdditionalData(newLine);
-                                countryData.setJapanMCAdditionalData(japanMCAdditionalData);
-                            }
-                            if(newLine.charAt(3) == '9'){
-                                euSpecificProcessing = parseEUSpecificProcessing(newLine);
-                                countryData.setEuSpecificProcessing(euSpecificProcessing);
-                            }
-                            if(newLine.charAt(3) == 'A'){
-                                polandMCSpecificCommercialCards = parsePolandMCSpecificCommercialCards(newLine);
-                                countryData.setPolandMCSpecificCommercialCards(polandMCSpecificCommercialCards);
-                            }
-                            if (newLine.charAt(3) == 'B'){
-                                colombiaMastercardDomesticProcessing = parseColombiaMastercardDomesticProcessing(newLine);
-                                countryData.setColombiaMastercardDomesticProcessing(colombiaMastercardDomesticProcessing);
-                            }
-                            newLine = lines.get(nextLineNumber);
-                        }
-                        transaction.setCountryData(countryData);
-                    }
-                    if (line.startsWith("CP08", 16)){
-                        discretionaryDataDefault = parseDiscretionaryDataDefault(line);
-                        String newLine = lines.get(nextLineNumber);
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-                            nextLineNumber++;
-                            if (newLine.charAt(3) == '1') {
-                                freeFormText = parseFreeFormText(newLine);
-                                discretionaryDataDefault.setFreeFormText(freeFormText);
-                            }
-                            newLine = lines.get(nextLineNumber);
-                        }
-                        transaction.setDiscretionaryDataDefault(discretionaryDataDefault);
-                    }
-                    if (line.startsWith("CP09", 16)){
-                        pushPayment = parsePushPayment(line);
-                        String newLine = lines.get(nextLineNumber);
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-                            nextLineNumber++;
-                            if (newLine.charAt(3) == '1') {
-                                pushPaymentOriginalCreditTransaction = parsePushPaymentOriginalCreditTransaction(newLine);
-                                pushPayment.setPushPaymentOriginalCreditTransaction(pushPaymentOriginalCreditTransaction);
-                            }
-                            if (newLine.charAt(3) == '2') {
-                                originalCreditTransactionAndAccountFundingTransaction = parseOriginalCreditTransactionAndAccountFundingTransaction(newLine);
-                                pushPayment.setOriginalCreditTransactionAndAccountFundingTransaction(originalCreditTransactionAndAccountFundingTransaction);
-                            }
-                            if (newLine.charAt(3) == '3') {
-                                senderName = parseSenderName(newLine);
-                                pushPayment.setSenderName(senderName);
-                            }
-                            if (newLine.charAt(3) == '4') {
-                                recipientName = parseRecipientName(newLine);
-                                pushPayment.setRecipientName(recipientName);
-                            }
-                            if (newLine.charAt(3) == '5') {
-                                recipientAdditionalData = parseRecipientAdditionalData(newLine);
-                                pushPayment.setRecipientAdditionalData(recipientAdditionalData);
-                            }
-                            if (newLine.charAt(3) == '6') {
-                                accountFundingTransactionDetails = parseAccountFundingTransactionDetails(newLine);
-                                pushPayment.setAccountFundingTransactionDetails(accountFundingTransactionDetails);
-                            }
-
-                            newLine = lines.get(nextLineNumber);
-                        }
-                        transaction.setPushPayment(pushPayment);
-                    }
-                    if (line.startsWith("CP10", 16)){
-                        carRentalDefault = parseCarRentalDefault(line);
-                        String newLine = lines.get(nextLineNumber);
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-                            nextLineNumber++;
-                            if (newLine.charAt(3) == '1') {
-                                carRentalDefault2 = parseCarRentalDefault2(newLine);
-                                carRentalDefault.setCarRentalDefault2(carRentalDefault2);
-                            }
-                            if (newLine.charAt(3) == '2') {
-                                carRentalDefault3 = parseCarRentalDefault3(newLine);
-                                carRentalDefault.setCarRentalDefault3(carRentalDefault3);
-                            }
-                            if (newLine.charAt(3) == '3') {
-                                carRentalDefault4 = parseCarRentalDefault4(newLine);
-                                carRentalDefault.setCarRentalDefault4(carRentalDefault4);
-                            }
-                            if (newLine.charAt(3) == '4') {
-                                carRentalDefault5 = parseCarRentalDefault5(newLine);
-                                carRentalDefault.setCarRentalDefault5(carRentalDefault5);
-                            }
-                            newLine = lines.get(nextLineNumber);
-                        }
-                        transaction.setCarRentalDefault(carRentalDefault);
-                    }
-
-                    if (line.startsWith("CP12", 16)){
-                        nextLineNumber++;
-
-                        log.info("Processing CP12 record at line number: {}", nextLineNumber);
-                        log.info("Processing CP12 record at line: {}", line);
-                        transactionData2 = parseTransactionData2(line);
-                        String newLine = lines.get(nextLineNumber);
-                        while (!ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
-
-                            log.info("Processing CP12 sub-record line: {}", newLine);
-                            nextLineNumber++;
-                            if (newLine.charAt(3) == '1') {
-                                merchantData2 = parseMerchantData2(newLine);
-                                transactionData2.setMerchantData2(merchantData2);
-                            }
-                            if (newLine.charAt(3) == '2') {
-                                merchantData3 = parseMerchantData3(newLine);
-                                transactionData2.setMerchantData3(merchantData3);
-                            }
-                            if (newLine.charAt(3) == '3') {
-                                gatewayDataContinuation = parseGatewayDataContinuation(newLine);
-                                transactionData2.setGatewayDataContinuation(gatewayDataContinuation);
-                            }
-                            if (newLine.charAt(3) == '4') {
-                                gatewayDataContinuation2 = parseGatewayDataContinuation2(newLine);
-                                transactionData2.setGatewayDataContinuation2(gatewayDataContinuation2);
-                            }
-                            newLine = lines.get(nextLineNumber);
-                        }
-                        transaction.setTransactionData2(transactionData2);
-                    }
-
                 }
+
+
+                if (line.startsWith("CP01", 16)) {
+                    if (transaction != null && !Objects.equals(transaction.getTransactionData().getTransactionCode(), null)) {
+                        transactions.add(transaction);
+                    }
+
+                    transaction = new Transaction();
+                    transactionData = parseTransactionData(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
+                            break;
+                        }
+
+                        switch (newLine.charAt(3)) {
+                            case '1' -> transactionData.setAdditionalData(parseAdditionalData(newLine));
+                            case '2' -> transactionData.setBillingAndShipping(parseBillingAndShipping(newLine));
+                            case '3' -> transactionData.setBillingAndShipping2(parseBillingAndShipping2(newLine));
+                            case '4' -> transactionData.setMerchantData(parseMerchantData(newLine));
+                            case '5' -> transactionData.setInstallmentPayment(parseInstallmentPayment(newLine));
+                            case '6' -> transactionData.setGatewayData(parseGatewayData(newLine));
+                            case '7' -> transactionData.setGatewayData2(parseGatewayData2(newLine));
+                            case '8' -> transactionData.setSupplementalData(parseSupplementalData(newLine));
+                            case '9' -> {
+                                if (newLine.startsWith("710", 4)) {
+                                    transactionData.setIntraCountryDataSouthAfrica(
+                                            parseIntraCountryDataSouthAfrica(newLine)
+                                    );
+                                }
+                            }
+                            case 'A' -> transactionData.setCurrencyConversion(parseCurrencyConversion(newLine));
+                            case 'B' -> transactionData.setGatewayData3(parseGatewayData3(newLine));
+                        }
+
+                        nextLineNumber++;
+                    }
+
+                    transaction.setTransactionData(transactionData);
+                    continue;
+                }
+
+                if (line.startsWith("CP02", 16)) {
+
+                    emvData = parseEMVData(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
+                            break;
+                        }
+
+                        if (newLine.charAt(3) == '1') {
+                            emvData.setEmvData2(parseEMVData2(newLine));
+                        }
+
+                        nextLineNumber++;
+                    }
+
+                    transaction.setEmvData(emvData);
+                    continue;
+                }
+
+                if (line.startsWith("CP03", 16)) {
+
+                    lodgingSummary = parseLodgingSummary(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
+                            break;
+                        }
+
+                        switch (newLine.charAt(3)) {
+                            case '1' -> lodgingSummary.setLodgingSummary2(parseLodgingSummary2(newLine));
+                            case '2' -> lodgingSummary.setLodgingSummary3(parseLodgingSummary3(newLine));
+                            case '3' -> lodgingSummary.setLodgingAdditionalAmounts(parseLodgingAdditionalAmounts(newLine));
+                            case '4' -> lodgingSummary.setLodgingAdditionalAmounts2(parseLodgingAdditionalAmounts2(newLine));
+                        }
+
+                        nextLineNumber++;
+                    }
+
+                    transaction.setLodgingSummary(lodgingSummary);
+                    continue;
+                }
+                if (line.startsWith("CP04", 16)) {
+
+                    levelTwoData = parseLevelTwoData(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
+                            break;
+                        }
+
+                        switch (newLine.charAt(3)) {
+                            case '1' -> levelTwoData.setLevelTwoDataAmericanExpress(
+                                    parseLevelTwoDataAmericanExpress(newLine)
+                            );
+                            case '2' -> levelTwoData.setLevelThreeDataPurchasingTransactionSummary(
+                                    parseLevelThreeDataPurchasingTransactionSummary(newLine)
+                            );
+                            case '3' -> levelTwoData.setLevelThreeDataPurchasingTransactionSummary2(
+                                    parseLevelThreeDataPurchasingTransactionSummary2(newLine)
+                            );
+                        }
+
+                        nextLineNumber++;
+                    }
+
+                    transaction.setLevelTwoData(levelTwoData);
+                    continue;
+                }
+                if (line.startsWith("CP05", 16)) {
+
+                    passengerItineraryData = parsePassengerItineraryData(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
+                            break;
+                        }
+
+                        switch (newLine.charAt(3)) {
+                            case '1' -> passengerItineraryData.setPassengerItineraryData2(parsePassengerItineraryData2(newLine));
+                            case '2' -> passengerItineraryData.setPassengerItineraryData3(parsePassengerItineraryData3(newLine));
+                            case '3' -> passengerItineraryData.setPassengerItineraryData4(parsePassengerItineraryData4(newLine));
+                            case '4' -> passengerItineraryData.setPassengerItineraryData5(parsePassengerItineraryData5(newLine));
+                            case '5' -> passengerItineraryData.setPassengerItineraryData6(parsePassengerItineraryData6(newLine));
+                            case '6' -> passengerItineraryData.setPassengerTransport(parsePassengerTransport(newLine));
+                            case '7' -> passengerItineraryData.setPassengerItineraryData7(parsePassengerItineraryData7(newLine));
+                        }
+
+                        nextLineNumber++;
+                    }
+
+                    transaction.setPassengerItineraryData(passengerItineraryData);
+                    continue;
+                }
+
+                if (line.startsWith("CP06", 16)) {
+                    enhancedDataPurchasingTransactionLineItemDetail = parseEnhancedDataPurchasingTransactionLineItemDetail(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) break;
+
+                        if (newLine.charAt(3) == '1') {
+                            enhancedDataPurchasingTransactionLineItemDetail
+                                    .setPurchasingTransactionLineItemDetail(
+                                            parsePurchasingTransactionLineItemDetail(newLine)
+                                    );
+                        }
+                        nextLineNumber++;
+                    }
+                    transaction.setEnhancedDataPurchasingTransactionLineItemDetail(
+                            enhancedDataPurchasingTransactionLineItemDetail
+                    );
+                    continue;
+                }
+                if (line.startsWith("CP07", 16)) {
+
+                    countryData = parseCountryData(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
+                            break;
+                        }
+
+                        switch (newLine.charAt(3)) {
+                            case '1' -> countryData.setBrazilCountryDataPARC(
+                                    parseBrazilCountryDataPARC(newLine));
+                            case '2' -> countryData.setBrazilCountryDataBNDES(
+                                    parseBrazilCountryDataBNDES(newLine));
+                            case '3' -> countryData.setBrazilCountryDataAmericanExpress(
+                                    parseBrazilCountryDataAmericanExpress(newLine));
+                            case '4' -> countryData.setCommercialMastercardInstallmentPayments(
+                                    parseCommercialMastercardInstallmentPayments(newLine));
+                            case '5' -> countryData.setConsumerMastercardInstallmentPayments(
+                                    parseConsumerMastercardInstallmentPayments(newLine));
+                            case '6' -> countryData.setBrazilCountryDataMastercardBNDES1(
+                                    parseBrazilCountryDataMastercardBNDES1(newLine));
+                            case '7' -> countryData.setDebtRepaymentInformation(
+                                    parseDebtRepaymentInformation(newLine));
+                            case '8' -> countryData.setJapanMCAdditionalData(
+                                    parseJapanMCAdditionalData(newLine));
+                            case '9' -> countryData.setEuSpecificProcessing(
+                                    parseEUSpecificProcessing(newLine));
+                            case 'A' -> countryData.setPolandMCSpecificCommercialCards(
+                                    parsePolandMCSpecificCommercialCards(newLine));
+                            case 'B' -> countryData.setColombiaMastercardDomesticProcessing(
+                                    parseColombiaMastercardDomesticProcessing(newLine));
+                        }
+
+                        nextLineNumber++;
+                    }
+
+                    transaction.setCountryData(countryData);
+                    continue;
+                }
+
+                if (line.startsWith("CP08", 16)) {
+
+                    discretionaryDataDefault = parseDiscretionaryDataDefault(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
+                            break;
+                        }
+
+                        if (newLine.charAt(3) == '1') {
+                            discretionaryDataDefault.setFreeFormText(
+                                    parseFreeFormText(newLine));
+                        }
+
+                        nextLineNumber++;
+                    }
+
+                    transaction.setDiscretionaryDataDefault(discretionaryDataDefault);
+                    continue;
+                }
+
+                if (line.startsWith("CP09", 16)) {
+
+                    pushPayment = parsePushPayment(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
+                            break;
+                        }
+
+                        switch (newLine.charAt(3)) {
+                            case '1' -> pushPayment.setPushPaymentOriginalCreditTransaction(
+                                    parsePushPaymentOriginalCreditTransaction(newLine));
+                            case '2' -> pushPayment.setOriginalCreditTransactionAndAccountFundingTransaction(
+                                    parseOriginalCreditTransactionAndAccountFundingTransaction(newLine));
+                            case '3' -> pushPayment.setSenderName(
+                                    parseSenderName(newLine));
+                            case '4' -> pushPayment.setRecipientName(
+                                    parseRecipientName(newLine));
+                            case '5' -> pushPayment.setRecipientAdditionalData(
+                                    parseRecipientAdditionalData(newLine));
+                            case '6' -> pushPayment.setAccountFundingTransactionDetails(
+                                    parseAccountFundingTransactionDetails(newLine));
+                        }
+
+                        nextLineNumber++;
+                    }
+
+                    transaction.setPushPayment(pushPayment);
+                    continue;
+                }
+
+                if (line.startsWith("CP10", 16)) {
+
+                    carRentalDefault = parseCarRentalDefault(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
+                            break;
+                        }
+
+                        switch (newLine.charAt(3)) {
+                            case '1' -> carRentalDefault.setCarRentalDefault2(
+                                    parseCarRentalDefault2(newLine));
+                            case '2' -> carRentalDefault.setCarRentalDefault3(
+                                    parseCarRentalDefault3(newLine));
+                            case '3' -> carRentalDefault.setCarRentalDefault4(
+                                    parseCarRentalDefault4(newLine));
+                            case '4' -> carRentalDefault.setCarRentalDefault5(
+                                    parseCarRentalDefault5(newLine));
+                        }
+
+                        nextLineNumber++;
+                    }
+
+                    transaction.setCarRentalDefault(carRentalDefault);
+                    continue;
+                }
+
+                if (line.startsWith("CP12", 16)) {
+
+                    transactionData2 = parseTransactionData2(line);
+                    nextLineNumber++;
+
+                    while (nextLineNumber < lines.size()) {
+                        String newLine = lines.get(nextLineNumber);
+
+                        if (ESCAPE_CHARACTERS.contains(newLine.substring(16, 20))) {
+                            break;
+                        }
+
+                        switch (newLine.charAt(3)) {
+                            case '1' -> transactionData2.setMerchantData2(
+                                    parseMerchantData2(newLine));
+                            case '2' -> transactionData2.setMerchantData3(
+                                    parseMerchantData3(newLine));
+                            case '3' -> transactionData2.setGatewayDataContinuation(
+                                    parseGatewayDataContinuation(newLine));
+                            case '4' -> transactionData2.setGatewayDataContinuation2(
+                                    parseGatewayDataContinuation2(newLine));
+                        }
+
+                        nextLineNumber++;
+                    }
+
+                    transaction.setTransactionData2(transactionData2);
+                    continue;
+                }
+
 
             }
         } catch (Exception e) {
